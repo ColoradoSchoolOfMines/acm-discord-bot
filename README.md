@@ -15,8 +15,9 @@ A Python-based Discord bot for the Colorado School of Mines ACM Discord server.
 ## Contributing
 
 * Make a new branch for one feature/issue in the code, open a pull request when ready for review.
-* Your first pull request should be accompanied by a [Public Domain Declaration](https://unlicense.org/#unlicensing-contributions), as part of keeping the repository free and unencumbered under the [UNLICENSE](#License).
 * Do feel free to add yourself to the [Contributors](#Contributors) list. Alphabetical order applies.
+* Be aware that the project uses a Zero-Clause BSD license, and by contributing you agree to release your contributions under the same license, as per the Github Terms of Service.
+* Only make contributions that are your own work, or fall under a [Public Domain Equivalent License](https://en.wikipedia.org/wiki/Public-domain-equivalent_license). Do not contribute substantial portions of code from work that is not your own.
 
 ## Contributors
 
@@ -24,5 +25,4 @@ A Python-based Discord bot for the Colorado School of Mines ACM Discord server.
 
 ## License
 
-This is free and unencumbered public domain software. For more information,
-see <https://unlicense.org/> or the accompanying [UNLICENSE](https://github.com/ColoradoSchoolOfMines/acm-discord-bot/blob/master/UNLICENSE) file.
+This project uses a permissive BSD Zero-Clause License. For more information, see the accompanying [LICENSE](/LICENSE) file.

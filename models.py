@@ -1,9 +1,4 @@
-'''
-Models for reading/writing data to database files
-
-This is free and unencumbered software released into the public domain.
-For more information, please refer to <http://unlicense.org/>
-'''
+""" Models for reading/writing data to database files """
 
 import dotenv
 from enum import Enum
