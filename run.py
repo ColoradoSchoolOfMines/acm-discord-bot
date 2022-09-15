@@ -58,7 +58,7 @@ def main():
     # Run Pycord Bot until keyboard interrupt
     logging.info(f'Starting Pycord Bot...')
     load_extensions()
-    bot.run(models.get_env_safe(token))
+    bot.run(models.get_env_safe(token, accept_empty=False))
     unload_extensions()
 
     # Safely shut down connections and save data
