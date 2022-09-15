@@ -16,8 +16,6 @@ class ENVs(Enum):
     TOKEN = "TOKEN"
     DEBUG_TOKEN = "DEBUG_TOKEN"
     DEBUG_GUILDS = "DEBUG_GUILDS"
-    MONGODB_URI = "MONGODB_URI"
-    MONGODB_CERT_PATH = "MONGODB_CERT_PATH"
 
 
 def get_env_safe(key: ENVs):
