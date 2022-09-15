@@ -1,9 +1,4 @@
-'''
-Unit testing for the models.py script
-
-This is free and unencumbered software released into the public domain.
-For more information, please refer to <http://unlicense.org/>
-'''
+""" Unit testing for the models.py script """
 
 import os
 import sys
