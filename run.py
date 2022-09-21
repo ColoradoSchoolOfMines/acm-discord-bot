@@ -7,12 +7,13 @@ import models
 
 logging.basicConfig(level=logging.INFO, filename='discord.log',
                     filemode='w', format='date+time:%(asctime)s | %(message)s')
+models.load_dot_env()
+
 DEBUG_GUILDS = models.get_env_safe(models.ENVs.DEBUG_GUILDS).split(',')
 bot = discord.Bot(debug_guilds=DEBUG_GUILDS)
 extensions = [
     "loot"
 ]
-
 
 @bot.event
 async def on_ready():
@@ -53,7 +54,7 @@ def main():
     # Run Pycord Bot until keyboard interrupt
     logging.info(f'Starting Pycord Bot...')
     load_extensions()
-    bot.run(models.get_env_safe(token))
+    bot.run(models.get_env_safe(token, accept_empty=False))
     unload_extensions()
 
     # Safely shut down connections and save data
