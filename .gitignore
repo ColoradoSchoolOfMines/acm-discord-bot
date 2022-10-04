@@ -12,3 +12,6 @@ environment/
 
 # Log files
 *.log
+
+# Database
+database.db
