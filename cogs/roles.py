@@ -1,7 +1,9 @@
 import logging
+from tokenize import Name
 import discord
 from discord.ext import commands, tasks
 import time
+import re
 
 class RoleTable():
     TIMEOUT_MIN = 10
@@ -13,8 +15,47 @@ class RoleTable():
         self.ctx = ctx
         self.time_last_active = time.time()
     
-    def add(self, role: str, emoji: str):
-        self.roles.append({role,emoji})
+    def add(self, role: str, emoji: str) -> bool:
+        """Adds the role and emoji to the role table
+
+        Args:
+            role (str)
+            emoji (str)
+
+        Returns:
+            bool: whether the addition succeeded
+        """
+        # Clean input
+        role_id: int
+        try:
+            role = role.rstrip()
+            emoji = emoji.rstrip()
+            # Accepts format <@&int> for role
+            if re.fullmatch("^<@&[0-9]+>$", role):
+                role_id = int(role[3:-1])
+            else:
+                raise NameError("Role does not match regex")
+            emoji = emoji.rstrip()
+            #Accepts format <:str:int> for emoji
+            if re.fullmatch("^<:.+:[0-9]+>$", emoji):
+                emoji = emoji.split(":")[1]
+            ###TODO: Include unicode emojis
+            #elif re.fullmatch("",emoji):
+            #    pass
+            else:
+                raise NameError("Emoji does not match regex")
+        except NameError:
+            logging.error(f'Role Not Recorded\tRole:{role_id}\tEmoji:{emoji}\n')
+            return False
+        
+        # Add emoji and role to table
+        logging.info(f'Emoji Recorded\nRole:{role_id}\n\nEmoji:{emoji}\n')
+        self.roles.append({role_id,emoji})
+        return True
+    
+    def commit(self, ctx):
+        self.ctx = ctx
+        
 
 class Roles(commands.Cog):
     role = discord.SlashCommandGroup("role", "commands for creating self assigned roles")
@@ -44,8 +85,10 @@ class Roles(commands.Cog):
     async def add(self, ctx: discord.ApplicationContext, role: str, emoji: str):
         table = await self.find_active_table(ctx.channel_id)
         if table != None:
-            table.add(role, emoji)
-            await ctx.respond(f'Added {role}:{emoji}', ephemeral=True)
+            if table.add(role, emoji):
+                await ctx.respond(f'Added {role}:{emoji}', ephemeral=True)
+            else:
+                await ctx.respond(f'Could not add {role}:{emoji} to table', ephemeral=True)
         else:
             await ctx.respond("No active table", ephemeral=True)
 
@@ -68,6 +111,7 @@ class Roles(commands.Cog):
     @test.command(description="")
     async def test_input(self, ctx: discord.ApplicationContext, role: str, emoji: str):
         """tests collection of emoji and role data"""
+        logging.info(f'Role:{role}\tEmoji:{emoji}')
         await ctx.respond(f'role: {role}, emoji: {emoji}')
 
     @tasks.loop(seconds=1)
