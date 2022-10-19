@@ -2,7 +2,8 @@ import discord
 import requests
 from discord.ext import commands
 import aiosqlite
-#from ics import Calendar, Event
+import os
+
 
 class Calendar(commands.Cog):
     calendar = discord.SlashCommandGroup("calendar", "calendar functionality")
@@ -19,12 +20,17 @@ class Calendar(commands.Cog):
             await ctx.respond("error: " + str(response))
         data = ((response.text).replace("\n ", "")).split("\r\n")
         
-        #parse and write to database
+        guildID = str(ctx.guild_id)
+
+        #create data/ if it doesnt exist
+        if not os.path.exists("data/"):
+            os.mkdir("data/")
+        
         async with aiosqlite.connect("data/database.db") as db:
-            #delete table if it already exists
-            await db.execute("DROP TABLE IF EXISTS events")
+            #drop table if it already exists
+            await db.execute("DROP TABLE IF EXISTS events_" + guildID)
             #create a new empty table
-            await db.execute("CREATE TABLE events(summary text, start text, end text, stamp text, uid integer PRIMARY KEY, description text, location text)")
+            await db.execute('CREATE TABLE events_' + guildID + '(summary text, start text, end text, uid integer PRIMARY KEY, description text, location text)')
             #parse data
             for l in data:
                 line = l.split(':', 1)
@@ -35,8 +41,6 @@ class Calendar(commands.Cog):
                     start = line[1]
                 elif id == "DTEND":
                     end = line[1]
-                elif id == "DTSTAMP":
-                    stamp = line[1]
                 elif id == "UID":
                     uid = int(line[1])
                 elif id == "DESCRIPTION":
@@ -44,16 +48,40 @@ class Calendar(commands.Cog):
                 elif id == "LOCATION":
                     location = line[1]
                 elif line == ["END", "VEVENT"]:
-                    await db.execute("INSERT INTO events VALUES(\'"+summary+"\',\'"+start+"\',\'"+end+"\',\'"+stamp+"\',"+str(uid)+",\'"+description+"\',\'"+location+"\')")
-            #commit changes
+                    await db.execute('INSERT INTO events_' + guildID + ' VALUES(\''+summary+'\',\''+start+'\',\''+end+'\','+str(uid)+',\''+description+'\',\''+location+'\')')
+            #commit changes to database
             await db.commit()
 
-        print("success")
-        await ctx.respond("success")
+        #test announcement
+        channel = discord.utils.get(ctx.guild.text_channels, id=1032389925271781479)
+        await announce(channel)
 
+        print("success")
+        await ctx.respond("success", ephemeral=True)
+
+async def announce(channel):
+    embed = discord.Embed(title="announcement!", description="this is a test announcement", color=0x0085c8)
+    await channel.send(embed=embed)
 
 def setup(bot):
     bot.add_cog(Calendar(bot))
 
 def teardown(bot):
     bot.remove_cog('Calendar')
+
+# we only need (no repeating events):
+# SUMMARY
+# DTSTART
+# DTEND
+# DESCRIPTION
+# LOCATION
+#
+# all known parameters for .ics file:
+# SUMMARY
+# DTSTART
+# DTEND
+# DTSTAMP
+# UID
+# DESCRIPTION
+# LOCATION
+#
