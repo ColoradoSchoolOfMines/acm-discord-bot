@@ -4,15 +4,19 @@ from discord.ext import commands
 import aiosqlite
 import os
 
+ANNOUNCEMENT_CHANNEL = 1032389925271781479
 
 class Calendar(commands.Cog):
     calendar = discord.SlashCommandGroup("calendar", "calendar functionality")
+
+
 
     def __init__(self, bot : discord.Bot):
         self.bot = bot
 
     @calendar.command(description="retrieve calendar")
     async def get(self, ctx):
+        guildID = str(ctx.guild_id)
 
         #get data
         response = requests.get("https://acm.mines.edu/schedule/ical.ics")
@@ -20,8 +24,6 @@ class Calendar(commands.Cog):
             await ctx.respond("error: " + str(response))
         data = ((response.text).replace("\n ", "")).split("\r\n")
         
-        guildID = str(ctx.guild_id)
-
         #create data/ if it doesnt exist
         if not os.path.exists("data/"):
             os.mkdir("data/")
@@ -53,35 +55,28 @@ class Calendar(commands.Cog):
             await db.commit()
 
         #test announcement
-        channel = discord.utils.get(ctx.guild.text_channels, id=1032389925271781479)
-        await announce(channel)
+        try:
+            await self.announce(ctx)
+        except Exception as e:
+            print(e)
 
         print("success")
         await ctx.respond("success", ephemeral=True)
 
-async def announce(channel):
-    embed = discord.Embed(title="announcement!", description="this is a test announcement", color=0x0085c8)
-    await channel.send(embed=embed)
+    async def announce(self, ctx):
+        #channel = self.bot.get_channel(ANNOUNCEMENT_CHANNEL)
+        channel = discord.utils.get(ctx.guild.text_channels, id=ANNOUNCEMENT_CHANNEL)
+        if channel is None:
+            raise Exception("Invalid announcement channel")
+        embed = discord.Embed(title="announcement!", description="this is a test announcement", color=0x0085c8)
+        await channel.send(embed=embed)
+        return
+
+async def check():
+    pass
 
 def setup(bot):
     bot.add_cog(Calendar(bot))
 
 def teardown(bot):
     bot.remove_cog('Calendar')
-
-# we only need (no repeating events):
-# SUMMARY
-# DTSTART
-# DTEND
-# DESCRIPTION
-# LOCATION
-#
-# all known parameters for .ics file:
-# SUMMARY
-# DTSTART
-# DTEND
-# DTSTAMP
-# UID
-# DESCRIPTION
-# LOCATION
-#
