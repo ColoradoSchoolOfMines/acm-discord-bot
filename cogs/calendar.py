@@ -1,6 +1,6 @@
 import discord
 import requests
-from discord.ext import commands
+from discord.ext import tasks, commands
 import aiosqlite
 import os
 
@@ -10,6 +10,10 @@ class Calendar(commands.Cog):
 
     def __init__(self, bot : discord.Bot):
         self.bot = bot
+        self.loop.start()
+
+    def cog_unload(self):
+        self.loop.stop()
 
     @calendar.command(description="retrieve calendar")
     async def get(self, ctx):
@@ -53,19 +57,22 @@ class Calendar(commands.Cog):
             await db.commit()
 
         #test announcement
-        await self.announce(ctx)
+        await self.announce(await self.getchannel(ctx))
 
         print("successfully retrieved calendar")
         await ctx.respond("successfully retrieved calendar", ephemeral=True)
+    
 
+    @tasks.loop(seconds=5.0)
+    async def loop(self):
+        print("hello")
 
-    async def announce(self, ctx):
-        channel = await self.getchannel(ctx)
-        embed = discord.Embed(title="announcement!", description="this is a test announcement", color=0x0085c8)
-        await channel.send(embed=embed)
+    async def announce(self, channel):
+        announcement = discord.Embed(title="announcement!", description="this is a test announcement", color=0x0085c8)
+        await channel.send(embed=announcement)
         return
 
-
+    #gets guild-specific announcement channel from db
     async def getchannel(self, ctx):
 
         GUILDID = str(ctx.guild_id)
@@ -89,11 +96,11 @@ class Calendar(commands.Cog):
         #find channel from id
         channel = discord.utils.get(ctx.guild.text_channels, id=list[0][1])
         if channel == None:
-            raise Exception("Invalid Channel ID")
+            channel = await self.setchannel(ctx)
 
         return channel
 
-
+    #queries user and sets guild-specific announcement channel in db
     @calendar.command(description="Set the announcement channel")
     async def setchannel(self, ctx):
 
@@ -130,7 +137,10 @@ class Calendar(commands.Cog):
                 else:
                     #find current channel
                     currChannel = discord.utils.get(ctx.guild.text_channels, id=list[0][1])
-                    label = f"current channel is: {currChannel.name}"
+                    if currChannel == None:
+                        label = "current channel is invalid"
+                    else:
+                        label = f"current channel is: {currChannel.name}"
 
                 #prompt user with modal
                 modal = Modal(label, title="Set Announcement Channel")
