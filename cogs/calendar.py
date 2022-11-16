@@ -55,7 +55,7 @@ class Calendar(commands.Cog):
         await db.close()
 
         #test announcement
-        await self.announce(await self.getchannel(ctx))
+        await self.announce(await self.getchannelid(ctx))
 
         print("successfully retrieved calendar")
         await ctx.respond("successfully retrieved calendar", ephemeral=True)
@@ -69,36 +69,29 @@ class Calendar(commands.Cog):
         await channel.send(embed=announcement)
         return
 
-    #gets guild-specific announcement channel from db
-    async def getchannel(self, ctx):
 
-        GUILDID = str(ctx.guild_id)
+    #gets guild-specific announcement channel from db
+    async def getchannelid(self, GUILDID):
 
         #open database
         db = await self.openDatabase()
         #create announcement_channels table if it doesnt exist
-        await db.execute("CREATE TABLE IF NOT EXISTS announcement_channels(guildID integer, announcementChannel integer)")
+        await db.execute("CREATE TABLE IF NOT EXISTS setup(guildID integer primary key unique, announcementChannel integer)")
         #find channel id from table
         async with db.execute(f"SELECT * FROM announcement_channels WHERE guildID={GUILDID}") as cursor:
             list = await cursor.fetchall()
         if list == []:
-            #if announcement channel not known, set the channel
-            channel = await self.setchannel(ctx)
-            list.append((GUILDID, channel.id))
+            #announcement channel is unknown
+            return None
         #close database
         await db.close()
 
-        #find channel from id
-        channel = discord.utils.get(ctx.guild.text_channels, id=list[0][1])
-        if channel == None:
-            channel = await self.setchannel(ctx)
+        return list[0]
 
-        return channel
 
     #queries user and sets guild-specific announcement channel in db
-    @calendar.command(description="Set the announcement channel")
-    async def setchannel(self, ctx):
-
+    @calendar.command(description="Configure the calendar cog")
+    async def setup(self, ctx):
         GUILDID = str(ctx.guild_id)
 
         #define modal
@@ -107,21 +100,24 @@ class Calendar(commands.Cog):
                 super().__init__(*args, **kwargs)
                 self.add_item(discord.ui.InputText(label=text[:45], style=discord.InputTextStyle.singleline, placeholder="Channel ID"))
             async def callback(self, interaction: discord.Interaction):
+                #check that channel exists
                 if self.children[0].value.isnumeric():
                     channel = discord.utils.get(ctx.guild.text_channels, id=int(self.children[0].value))
                     if channel == None:
                         await interaction.response.send_message("Error: Invalid Channel ID", ephemeral=True)
                         return
-                await interaction.response.send_message(f"Annoucement channel set to: `{channel.name}`", ephemeral=True)
+                await interaction.response.send_message("Successfully configured calendar!", ephemeral=True)
                 return
 
         #open datbase
         db = await self.openDatabase()
         #create announcement_channels table if it doesnt exist
-        await db.execute("CREATE TABLE IF NOT EXISTS announcement_channels(guildID integer, announcementChannel integer)")
+        await db.execute("CREATE TABLE IF NOT EXISTS setup(guildID integer not null unique, announcementChannel integer not null, url integer not null, primary key(\"guildID\"))")
         #find channel from table
-        async with db.execute(f"SELECT * FROM announcement_channels WHERE guildID={GUILDID}") as cursor:
+        async with db.execute(f"SELECT * FROM setup WHERE guildID={GUILDID}") as cursor:
             list = await cursor.fetchall()
+            print(list)
+            return
             if list == []:
                 #if announcement channel not known
                 label = "there is no current channel set"
