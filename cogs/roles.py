@@ -9,11 +9,36 @@ class RoleTable():
     TIMEOUT_MIN = 10
     TIMEOUT_SEC = TIMEOUT_MIN * 60
     DBFILE = "data/database.db"
+    sqlite = sqlite3
 
     def __init__(self, channel_id: int):
         self.channel_id = channel_id
         self.time_last_active = time.time()
         self.roles = []
+    
+    @classmethod
+    def fromSQL(cls, message_id):
+        with sqlite3.connect(cls.DBFILE) as db:
+            try:
+                cursor = db.execute(f'SELECT message_id, emoji_name, role_id, emoji_id FROM role_table WHERE message_id = {message_id}')
+                table = cursor.fetchall()
+            except sqlite3.IntegrityError as ie:
+                logging.error(f'{ie}: ({message_id})')
+                return None
+            roles = []
+            for row in table:
+                assert message_id == row[0]
+                roles.append((row[1], row[2], row[3]))
+            return roles
+    
+    @classmethod
+    def tableMessage(cls, message_id):
+        roles = cls.fromSQL(message_id)
+        output = ""
+        for role in roles:
+            output += \
+            f'<:{role[0]}:{role[2]}>: <@&{role[1]}>\n'
+        return output
     
     def add(self, role: str, emoji_str: str) -> bool:
         """Adds the role and emoji to the role table
@@ -48,25 +73,27 @@ class RoleTable():
         
         # Add emoji and role to table
         logging.info(f'Emoji Recorded\nRole:{role_id}\n\nEmoji:{emoji}\n')
-        self.roles.append((emoji.name,role_id))
+        self.roles.append((emoji.name,role_id,emoji.id))
         self.time_last_active = time.time()
         return True
     
     def commit(self, message_id) -> bool:
         with sqlite3.connect(self.DBFILE) as db:
-            for role in self.roles:
-                try:
-                    db.execute("""CREATE TABLE IF NOT EXISTS role_table (
-                                    message_id	INTEGER NOT NULL,
-                                    emoji_name	TEXT NOT NULL,
-                                    role_id     INTEGER NOT NULL UNIQUE,
-                                    PRIMARY KEY("message_id","emoji_name")
-                                );""")
-                    db.execute(f'INSERT INTO role_table (message_id,emoji_name,role_id) VALUES ({message_id},\'{role[0]}\',{role[1]});')
+            try:
+                db.execute("""CREATE TABLE IF NOT EXISTS role_table (
+                                message_id	INTEGER NOT NULL,
+                                emoji_name	TEXT NOT NULL,
+                                role_id     INTEGER NOT NULL UNIQUE,
+                                emoji_id    INTEGER NOT NULL UNIQUE,
+                                PRIMARY KEY("message_id","emoji_id")
+                            );""")
+                for role in self.roles:
+                    db.execute(f'INSERT INTO role_table (message_id,emoji_name,role_id,emoji_id) \
+                        VALUES ({message_id},\'{role[0]}\',{role[1]},{role[2]});')
                     db.commit()
-                except sqlite3.IntegrityError as ie:
-                    logging.error(f'{ie}: ({message_id},\'{role[0]}\',{role[1]})')
-                    return False
+            except sqlite3.IntegrityError as ie:
+                logging.error(f'{ie}: ({message_id},\'{role[0]}\',{role[1]},{role[1]})')
+                return False
         return True
 
 class Roles(commands.Cog):
@@ -115,10 +142,18 @@ class Roles(commands.Cog):
 
     @table.command()
     async def commit(self, ctx: discord.ApplicationContext):
-        table = await self.find_active_table(ctx.channel_id)
+        table = self.find_active_table(ctx.channel_id)
         if table != None:
-            self.active_tables.remove(table)
-            await ctx.respond(f'Stopping table', ephemeral=True)
+            await ctx.respond(f'Commiting table...', ephemeral=True)
+            message = await ctx.send(f'Table Placeholder')
+            if table.commit(message.id):
+                self.active_tables.remove(table)
+                content = RoleTable.tableMessage(message_id=message.id)
+                await message.edit(content)
+            else:
+                self.active_tables.remove(table)
+                await ctx.respond("There was an error in commiting the table", ephemeral=True)
+                await message.delete()
         else:
             await ctx.respond("No active table", ephemeral=True)
 

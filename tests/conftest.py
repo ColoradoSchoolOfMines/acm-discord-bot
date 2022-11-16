@@ -19,8 +19,11 @@ def my_fixture():
     if os.path.exists(TEST_DIR):
         shutil.rmtree(TEST_DIR)
     os.mkdir(TEST_DIR)
+
+    # Modify code to use testing parameters
     roles.RoleTable.DBFILE = f'{TEST_DIR}/database.db'
 
+    # Run the tests
     yield pytest.param
     
     #Teardown
