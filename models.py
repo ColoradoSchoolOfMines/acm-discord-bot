@@ -5,7 +5,9 @@ from enum import Enum
 import os
 import logging
 
-ENV_DIR = "static"
+STATIC_DIR = "static"
+ENV_FILENAME = ".env"
+DATABASE_PATH = os.path.abspath("data/database.db")
 
 class ENVs(Enum):
     """Defines env variables that should be present in a .env file accessable to the script """
@@ -14,7 +16,7 @@ class ENVs(Enum):
     DEBUG_GUILDS = "DEBUG_GUILDS"
 
 
-def create_dot_env(dir: str=ENV_DIR):
+def create_dot_env(dir: str=STATIC_DIR):
     """Creates a new .env file with blank fields for each key in models.ENVs
 
     Args:
@@ -22,23 +24,23 @@ def create_dot_env(dir: str=ENV_DIR):
     """
     if not os.path.exists(dir):
         os.mkdir(dir)
-    with open(f'{dir}/.env', 'w') as file:
+    with open(f'{dir}/{ENV_FILENAME}', 'w') as file:
         file.write("# Environmental variables for project")
         for env in ENVs:
             file.write(f'\n{env.value}=')
 
 
-def load_dot_env(dir: str=ENV_DIR):
+def load_dot_env(dir: str=STATIC_DIR):
     """Loads a .env file. If none found, log a warning and create a new .env
 
     Args:
         dir (str): directory to load .env. Defaults to models.ENV_DIR.
     """
-    if not os.path.isfile(f'{dir}/.env'):
+    if not os.path.isfile(f'{dir}/{ENV_FILENAME}'):
         create_dot_env(dir=dir)
         logging.warning(
-            f'No .env found in {dir}, created new one with blank fields')
-    dotenv.load_dotenv(f'{dir}/.env')
+            f'No {ENV_FILENAME} found in {dir}, created new one with blank fields')
+    dotenv.load_dotenv(f'{dir}/{ENV_FILENAME}')
 
 
 def get_env_safe(key: ENVs, accept_empty=True):
