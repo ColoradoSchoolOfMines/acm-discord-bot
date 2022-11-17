@@ -60,9 +60,9 @@ class Calendar(commands.Cog):
         print("successfully retrieved calendar")
         await ctx.respond("successfully retrieved calendar", ephemeral=True)
     
-    @tasks.loop(seconds=5.0)
+    @tasks.loop(seconds=30.0)
     async def loopp(self):
-        print("hello")
+        print("---")
 
     async def announce(self, channel):
         announcement = discord.Embed(title="announcement!", description="this is a test announcement", color=0x0085c8)
@@ -78,7 +78,7 @@ class Calendar(commands.Cog):
         #create announcement_channels table if it doesnt exist
         await db.execute("CREATE TABLE IF NOT EXISTS setup(guildID integer primary key unique, announcementChannel integer)")
         #find channel id from table
-        async with db.execute(f"SELECT * FROM announcement_channels WHERE guildID={GUILDID}") as cursor:
+        async with db.execute(f"SELECT * FROM setup WHERE guildID={GUILDID}") as cursor:
             list = await cursor.fetchall()
         if list == []:
             #announcement channel is unknown
@@ -90,64 +90,110 @@ class Calendar(commands.Cog):
 
 
     #queries user and sets guild-specific announcement channel in db
-    @calendar.command(description="Configure the calendar cog")
+    @calendar.command(description="Configure calendar settings")
     async def setup(self, ctx):
+
         GUILDID = str(ctx.guild_id)
+
+        def validateChannelID(channelid:str):
+            if not channelid.isnumeric():
+                return False
+            channel = discord.utils.get(ctx.guild.text_channels, id=int(channelid))
+            if channel == None:
+                return False
+            else:
+                return True
+        
+        def validateURL(url:str):
+            try:
+                response = requests.get(url)
+                if not response:
+                    return False
+                else:
+                    return True
+            except Exception:
+                return False
 
         #define modal
         class Modal(discord.ui.Modal):
-            def __init__(self, text, *args, **kwargs) -> None:
+            channel = "NULL"
+            url = "NULL"
+            def __init__(self, channeltext, urltext, *args, **kwargs) -> None:
                 super().__init__(*args, **kwargs)
-                self.add_item(discord.ui.InputText(label=text[:45], style=discord.InputTextStyle.singleline, placeholder="Channel ID"))
+                self.add_item(discord.ui.InputText(label=channeltext[:45], style=discord.InputTextStyle.singleline, placeholder="Channel ID"))
+                self.add_item(discord.ui.InputText(label=urltext[:45], style=discord.InputTextStyle.singleline, placeholder="Calendar URL"))
             async def callback(self, interaction: discord.Interaction):
-                #check that channel exists
-                if self.children[0].value.isnumeric():
-                    channel = discord.utils.get(ctx.guild.text_channels, id=int(self.children[0].value))
-                    if channel == None:
-                        await interaction.response.send_message("Error: Invalid Channel ID", ephemeral=True)
-                        return
-                await interaction.response.send_message("Successfully configured calendar!", ephemeral=True)
-                return
-
-        #open datbase
-        db = await self.openDatabase()
-        #create announcement_channels table if it doesnt exist
-        await db.execute("CREATE TABLE IF NOT EXISTS setup(guildID integer not null unique, announcementChannel integer not null, url integer not null, primary key(\"guildID\"))")
-        #find channel from table
-        async with db.execute(f"SELECT * FROM setup WHERE guildID={GUILDID}") as cursor:
-            list = await cursor.fetchall()
-            print(list)
-            return
-            if list == []:
-                #if announcement channel not known
-                label = "there is no current channel set"
-            else:
-                #find current channel
-                currChannel = discord.utils.get(ctx.guild.text_channels, id=list[0][1])
-                if currChannel == None:
-                    label = "current channel is invalid"
+                #validate channel
+                message = "Set Channel to: "
+                if validateChannelID(self.children[0].value):
+                    self.channel = self.children[0].value
+                    message += f"`{discord.utils.get(ctx.guild.text_channels, id=int(self.channel)).name}`"
                 else:
-                    label = f"current channel is: {currChannel.name}"
+                    message += "`Invalid Channel`"
+                #validate url
+                message += "\nSet URL to: "
+                if validateURL(self.children[1].value):
+                    self.url = f"\"{self.children[1].value}\""
+                    c = '\"'
+                    message += f"`{self.url.replace((c),'')}`"
+                else:
+                    message += "`Invalid URL`"
+                #send response
+                embed = discord.Embed(title="Calendar Setup:", description=message, color=0x0085c8)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            #prompt user with modal
-            modal = Modal(label, title="Set Announcement Channel")
-            await ctx.send_modal(modal)
-            await modal.wait()
-            channel = discord.utils.get(ctx.guild.text_channels, id=int(modal.children[0].value))
-
-            if list == []:
-                #if not known, insert new data
-                await cursor.execute(f"INSERT INTO announcement_channels VALUES({GUILDID}, {channel.id})")
-            else:
-                #if already known, update data
-                await cursor.execute(f"UPDATE announcement_channels SET announcementChannel = {channel.id}")
-        #commit changes to database
-        await db.commit()
-        #close database
+        #get known information
+        db = await self.openDatabase()
+        await db.execute("""CREATE TABLE IF NOT EXISTS setup(
+                            guildID INTEGER PRIMARY KEY,
+                            announcementChannel INTEGER,
+                            url TEXT
+                        )""")
+        async with db.execute(f"SELECT * FROM setup WHERE guildID={GUILDID}") as cursor:
+            known = await cursor.fetchall()
         await db.close()
 
-        print(f"successfully set channel to: {channel.name} ({channel.id})")
-        return channel
+        print(known)
+        
+        #set modal text
+        if known == []:
+            channeltext = "(there is no current channel set)"
+            urltext = "(there is no current url set)"
+        else:
+            if known[0][1] == None:
+                channeltext = "(there is no current channel set)"
+            elif (discord.utils.get(ctx.guild.text_channels, id=known[0][1])) == None:
+                channeltext = "current channel is invalid"
+            else:
+                channeltext = f"current channel is: {known[0][1]}"
+            if known[0][2] == None:
+                urltext = "(there is no current url set)"
+            else:
+                urltext = f"current url is: {known[0][2]}"
+
+        #prompt user with modal
+        modal = Modal(channeltext, urltext, title="Calendar Setup")
+        await ctx.send_modal(modal)
+        await modal.wait()
+
+        #write data to database
+        db = await self.openDatabase()
+        async with db.execute(f"SELECT * FROM setup WHERE guildID={GUILDID}") as cursor:
+            if known == []:
+                #if not known, insert new data
+                await cursor.execute(f"INSERT INTO setup VALUES({GUILDID}, {modal.channel}, {modal.url})")
+            else:
+                #if already known, update data
+                await cursor.execute(f"""UPDATE setup SET
+                                        announcementChannel = {modal.channel},
+                                        url = {modal.url}
+                                        WHERE guildID={GUILDID}""")
+        await db.commit()
+        await db.close()
+
+        print(f"changed channel to: {modal.children[0].value}\nchanged url to: {modal.children[1].value}")
+        return
+
 
     #opens database from: data/database.db
     async def openDatabase(self):
@@ -161,3 +207,6 @@ def setup(bot):
 
 def teardown(bot):
     bot.remove_cog('Calendar')
+
+#channel: 1032389925271781479
+#url: https://acm.mines.edu/schedule/ical.ics
