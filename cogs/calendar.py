@@ -15,79 +15,95 @@ class Calendar(commands.Cog):
     def cog_unload(self):
         self.loopp.stop()
 
-    @calendar.command(description="retrieve calendar")
-    async def get(self, ctx):
-        GUILDID = str(ctx.guild_id)
+    def parseData(self, data, GUILDID:int):
+        events = []
 
-        #get data
-        response = requests.get("https://acm.mines.edu/schedule/ical.ics")
-        if not response:
-            await ctx.respond("error: " + str(response))
-        data = ((response.text).replace("\n ", "")).split("\r\n")
-        
-        #open database
-        db = await self.openDatabase()
-        #drop table if it already exists
-        await db.execute(f"DROP TABLE IF EXISTS events_{GUILDID}")
-        #create a new empty table
-        await db.execute(f"CREATE TABLE events_{GUILDID}(summary text, start text, end text, uid integer PRIMARY KEY, description text, location text)")
         #parse data
         for l in data:
             line = l.split(':', 1)
             id = line[0].split(';', 1)[0]
             if id == "SUMMARY":
-                summary = line[1]
+                name = line[1]
             elif id == "DTSTART":
-                start = line[1]
+                startTime = line[1]
             elif id == "DTEND":
-                end = line[1]
-            elif id == "UID":
-                uid = int(line[1])
+                endTime = line[1]
             elif id == "DESCRIPTION":
                 description = line[1].replace("'", "")
             elif id == "LOCATION":
                 location = line[1]
             elif line == ["END", "VEVENT"]:
-                await db.execute(f"INSERT INTO events_{GUILDID} VALUES(\'{summary}\',\'{start}\',\'{end}\',{uid},\'{description}\',\'{location}\')")
-        #commit changes to database
-        await db.commit()
-        #close database
+                events.append((name, GUILDID, startTime, endTime, description, location))
+
+        return events
+    
+    @tasks.loop(seconds=60.0)
+    async def loopp(self):
+
+        #get information
+        db = await self.openDatabase()
+        await db.execute("""CREATE TABLE IF NOT EXISTS setup(
+                            guildID INTEGER PRIMARY KEY,
+                            announcementChannel INTEGER,
+                            url TEXT
+                        )""")
+        async with db.execute(f"SELECT * FROM setup") as cursor:
+            known = await cursor.fetchall()
         await db.close()
 
-        #test announcement
-        await self.announce(await self.getchannelid(ctx))
+        #for each guild
+        events = []
+        for i in range(len(known)):
+            guildid = known[i][0]
+            channelid = known[i][1]
+            url = known[i][2]
+            print(f"querying #{i+1}: {known[i]}")
+            if url == None:
+                print("    No url to query")
+                continue
+            else:
+                #get data
+                response = requests.get(url)
+                if not response:
+                    print("    invalid url")
+                    continue
+                data = ((response.text).replace("\n ", "")).split("\r\n")
+                events += self.parseData(data, guildid)
 
-        print("successfully retrieved calendar")
-        await ctx.respond("successfully retrieved calendar", ephemeral=True)
-    
-    @tasks.loop(seconds=30.0)
-    async def loopp(self):
-        print("---")
+            # #write events
+            # db = await self.openDatabase()
+            # await db.execute("""CREATE TABLE IF NOT EXISTS events(
+            #                     name TEXT,
+            #                     guildID INTEGER,
+            #                     startTime TEXT,
+            #                     endTime TEXT,
+            #                     description TEXT,
+            #                     location TEXT
+            #                 )""")
+            # await db.close()
 
-    async def announce(self, channel):
+            #test announcement
+            if channelid == None:
+                print("    No announcement channel")
+            elif (await self.announce(guildid, channelid)):
+                print("    Invalid announcement channel")
+            else:
+                print("    Made announcement")
+
+
+    async def announce(self, guildid:int, channelid:int):
+        #get guild
+        guilds = [x for x in self.bot.guilds if x.id == guildid]
+        if guilds == []:
+            return -1
+        #get channel
+        channel = discord.utils.get(guilds[0].text_channels, id=int(channelid))
+        if channel == None:
+            return -1
+        #make announcement
         announcement = discord.Embed(title="announcement!", description="this is a test announcement", color=0x0085c8)
         await channel.send(embed=announcement)
-        return
-
-
-    #gets guild-specific announcement channel from db
-    async def getchannelid(self, GUILDID):
-
-        #open database
-        db = await self.openDatabase()
-        #create announcement_channels table if it doesnt exist
-        await db.execute("CREATE TABLE IF NOT EXISTS setup(guildID integer primary key unique, announcementChannel integer)")
-        #find channel id from table
-        async with db.execute(f"SELECT * FROM setup WHERE guildID={GUILDID}") as cursor:
-            list = await cursor.fetchall()
-        if list == []:
-            #announcement channel is unknown
-            return None
-        #close database
-        await db.close()
-
-        return list[0]
-
+        return 0
 
     #queries user and sets guild-specific announcement channel in db
     @calendar.command(description="Configure calendar settings")
@@ -152,8 +168,6 @@ class Calendar(commands.Cog):
         async with db.execute(f"SELECT * FROM setup WHERE guildID={GUILDID}") as cursor:
             known = await cursor.fetchall()
         await db.close()
-
-        print(known)
         
         #set modal text
         if known == []:
