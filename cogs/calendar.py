@@ -3,6 +3,8 @@ import requests
 from discord.ext import tasks, commands
 import aiosqlite
 import os
+import time
+import calendar
 
 
 class Calendar(commands.Cog):
@@ -17,14 +19,14 @@ class Calendar(commands.Cog):
 
     def parseData(self, data, GUILDID:int):
         events = []
-        location = None
-        description = None
+        location = ""
+        description = ""
         #parse data
         for l in data:
             line = l.split(':', 1)
             id = line[0].split(';', 1)[0]
             if id == "SUMMARY":
-                name = line[1]
+                name = line[1].replace("'","")
             elif id == "DTSTART":
                 startTime = line[1]
             elif id == "DTEND":
@@ -32,13 +34,12 @@ class Calendar(commands.Cog):
             elif id == "DESCRIPTION":
                 description = line[1].replace("'", "")
             elif id == "LOCATION":
-                location = line[1]
+                location = line[1].replace("'","")
             elif line == ["END", "VEVENT"]:
                 events.append((name, GUILDID, startTime, endTime, description, location))
-
         return events
     
-    @tasks.loop(seconds=60.0)
+    @tasks.loop(seconds=120.0)
     async def loopp(self):
 
         #get information
@@ -67,7 +68,7 @@ class Calendar(commands.Cog):
                 if not response:
                     print("invalid url")
                     continue
-                data = ((response.text).replace("\n ", "")).split("\r\n")
+                data = response.text.replace("\r\n ", "").replace("\,", ",").split("\r\n")
                 events += self.parseData(data, guildid)
                 print("success")
 
@@ -83,33 +84,66 @@ class Calendar(commands.Cog):
                             location TEXT
                         )""")
         for event in events:
-            #await db.execute
-            pass
+            await db.execute(f"INSERT INTO events VALUES('{event[0]}', {event[1]} ,'{event[2]}','{event[3]}','{event[4]}','{event[5]}')")
+        await db.commit()
         await db.close()
 
-        #test announcement
+        #make an announcement for each guild
         print("announcing...")
         for guildid, channelid, url in known:
             print(f"  {guildid}: ", end ="")
+
+            #find next upcoming or most recent event
+            currTime = int(time.time())
+            minIndex = -1
+            minValue = 10**100
+            for i, event in enumerate(events):
+                if event[1] != guildid: continue
+                format = "%Y%m%d"
+                if 'T' in event[2]: #if date AND time
+                    format += "T%H%M%S"
+                diff = calendar.timegm(time.strptime(event[2], format)) - currTime
+                if diff > 0 and diff < minValue:
+                    minValue = diff
+                    minIndex = i
+
+            #make announcement
             if channelid == None:
                 print("no announcement channel")
-            elif (await self.announce(guildid, channelid)):
+            elif (await self.announceEvent(guildid, channelid, events[minIndex])):
                 print("invalid announcement channel")
             else:
                 print("success")
 
 
-    async def announce(self, guildid:int, channelid:int):
-        #get guild
+    async def announceEvent(self, guildid:int, channelid:int, event):
+
+        #get guild from guildid
         guilds = [x for x in self.bot.guilds if x.id == guildid]
         if guilds == []:
             return -1
-        #get channel
+
+        #get channel from guild
         channel = discord.utils.get(guilds[0].text_channels, id=int(channelid))
         if channel == None:
             return -1
-        #make announcement
-        announcement = discord.Embed(title="announcement!", description="this is a test announcement", color=0x0085c8)
+        
+        #build announcement
+        announcement = discord.Embed(title="Upcoming Event:", color=0x0085c8)
+        informat = "%Y%m%d"
+        outformat = "%A, %B %d"
+        if 'T' in event[2]: #if date AND time
+            informat += "T%H%M%S"
+            outformat = "%I:%M%p " + outformat
+        description = time.strftime(outformat, time.strptime(event[2], informat))
+        if event[5] != "":
+            description += f"\n{event[5]}"
+        if event[4] != "":
+            description += f"\n{event[4]}"
+        announcement.add_field(name=event[0], value=description)
+
+        #announce!
+        await channel.send("@here") # <-- temporary
         await channel.send(embed=announcement)
         return 0
 
