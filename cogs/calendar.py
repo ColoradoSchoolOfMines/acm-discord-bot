@@ -17,7 +17,8 @@ class Calendar(commands.Cog):
 
     def parseData(self, data, GUILDID:int):
         events = []
-
+        location = None
+        description = None
         #parse data
         for l in data:
             line = l.split(':', 1)
@@ -50,45 +51,52 @@ class Calendar(commands.Cog):
         async with db.execute(f"SELECT * FROM setup") as cursor:
             known = await cursor.fetchall()
         await db.close()
+        print(f"\nfound {len(known)} guilds:")
 
-        #for each guild
+        #query each guild
         events = []
-        for i in range(len(known)):
-            guildid = known[i][0]
-            channelid = known[i][1]
-            url = known[i][2]
-            print(f"querying #{i+1}: {known[i]}")
+        print("querying...")
+        for guildid, channelid, url in known:
+            print(f"  {guildid}: ", end ="")
             if url == None:
-                print("    No url to query")
+                print("no url to query")
                 continue
             else:
                 #get data
                 response = requests.get(url)
                 if not response:
-                    print("    invalid url")
+                    print("invalid url")
                     continue
                 data = ((response.text).replace("\n ", "")).split("\r\n")
                 events += self.parseData(data, guildid)
+                print("success")
 
-            # #write events
-            # db = await self.openDatabase()
-            # await db.execute("""CREATE TABLE IF NOT EXISTS events(
-            #                     name TEXT,
-            #                     guildID INTEGER,
-            #                     startTime TEXT,
-            #                     endTime TEXT,
-            #                     description TEXT,
-            #                     location TEXT
-            #                 )""")
-            # await db.close()
+        #write events
+        db = await self.openDatabase()
+        await db.execute("DROP TABLE IF EXISTS events")
+        await db.execute("""CREATE TABLE events(
+                            name TEXT NOT NULL,
+                            guildID INTEGER NOT NULL,
+                            startTime TEXT NOT NULL,
+                            endTime TEXT NOT NULL,
+                            description TEXT,
+                            location TEXT
+                        )""")
+        for event in events:
+            #await db.execute
+            pass
+        await db.close()
 
-            #test announcement
+        #test announcement
+        print("announcing...")
+        for guildid, channelid, url in known:
+            print(f"  {guildid}: ", end ="")
             if channelid == None:
-                print("    No announcement channel")
+                print("no announcement channel")
             elif (await self.announce(guildid, channelid)):
-                print("    Invalid announcement channel")
+                print("invalid announcement channel")
             else:
-                print("    Made announcement")
+                print("success")
 
 
     async def announce(self, guildid:int, channelid:int):
