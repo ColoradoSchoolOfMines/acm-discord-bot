@@ -39,7 +39,7 @@ class Calendar(commands.Cog):
                 events.append((name, GUILDID, startTime, endTime, description, location))
         return events
     
-    @tasks.loop(seconds=120.0)
+    @tasks.loop(minutes=60.0)
     async def loopp(self):
 
         #get information
@@ -143,7 +143,7 @@ class Calendar(commands.Cog):
         announcement.add_field(name=event[0], value=description)
 
         #announce!
-        await channel.send("@here") # <-- temporary
+        await channel.send("@(insert role here)") # <-- temporary
         await channel.send(embed=announcement)
         return 0
 
@@ -182,20 +182,18 @@ class Calendar(commands.Cog):
                 self.add_item(discord.ui.InputText(label=urltext[:45], style=discord.InputTextStyle.singleline, placeholder="Calendar URL"))
             async def callback(self, interaction: discord.Interaction):
                 #validate channel
-                message = "Set Channel to: "
                 if validateChannelID(self.children[0].value):
                     self.channel = self.children[0].value
-                    message += f"`{discord.utils.get(ctx.guild.text_channels, id=int(self.channel)).name}`"
+                    message = f"Set Channel to: `{discord.utils.get(ctx.guild.text_channels, id=int(self.channel)).name}`"
                 else:
-                    message += "`Invalid Channel`"
+                    message = "Invalid Channel, nothing was changed"
                 #validate url
-                message += "\nSet URL to: "
                 if validateURL(self.children[1].value):
                     self.url = f"\"{self.children[1].value}\""
                     c = '\"'
-                    message += f"`{self.url.replace((c),'')}`"
+                    message += f"\nSet URL to: `{self.url.replace((c),'')}`"
                 else:
-                    message += "`Invalid URL`"
+                    message += "\nInvalid URL, nothing was changed"
                 #send response
                 embed = discord.Embed(title="Calendar Setup:", description=message, color=0x0085c8)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -239,15 +237,16 @@ class Calendar(commands.Cog):
                 #if not known, insert new data
                 await cursor.execute(f"INSERT INTO setup VALUES({GUILDID}, {modal.channel}, {modal.url})")
             else:
-                #if already known, update data
-                await cursor.execute(f"""UPDATE setup SET
-                                        announcementChannel = {modal.channel},
-                                        url = {modal.url}
-                                        WHERE guildID={GUILDID}""")
+                #else update data
+                if modal.channel != "NULL":
+                    await cursor.execute(f"""UPDATE setup SET announcementChannel = {modal.channel} WHERE guildID={GUILDID}""")
+                    print(f"\nchanged {GUILDID}'s channel to: {modal.channel}")
+                if modal.url != "NULL":
+                    await cursor.execute(f"""UPDATE setup SET url = {modal.url} WHERE guildID={GUILDID}""")
+                    print(f"\nchanged {GUILDID}'s url to: {modal.url}")
         await db.commit()
         await db.close()
 
-        print(f"changed channel to: {modal.children[0].value}\nchanged url to: {modal.children[1].value}")
         return
 
 
