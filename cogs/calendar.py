@@ -12,16 +12,17 @@ class Calendar(commands.Cog):
 
     def __init__(self, bot : discord.Bot):
         self.bot = bot
-        self.loopp.start()
+        self.check.start()
 
     def cog_unload(self):
-        self.loopp.stop()
+        self.check.stop()
 
+
+    #parse .ics data into events
     def parseData(self, data, GUILDID:int):
         events = []
         location = ""
         description = ""
-        #parse data
         for l in data:
             line = l.split(':', 1)
             id = line[0].split(';', 1)[0]
@@ -39,8 +40,10 @@ class Calendar(commands.Cog):
                 events.append((name, GUILDID, startTime, endTime, description, location))
         return events
     
+
+    #main loop to get data, write to db, and announce
     @tasks.loop(minutes=60.0)
-    async def loopp(self):
+    async def check(self):
 
         #get information
         db = await self.openDatabase()
@@ -72,7 +75,7 @@ class Calendar(commands.Cog):
                 events += self.parseData(data, guildid)
                 print("success")
 
-        #write events
+        #write events to db
         db = await self.openDatabase()
         await db.execute("DROP TABLE IF EXISTS events")
         await db.execute("""CREATE TABLE events(
@@ -89,12 +92,12 @@ class Calendar(commands.Cog):
         await db.close()
 
         #make an announcement for each guild
+        currTime = int(time.time())
         print("announcing...")
         for guildid, channelid, url in known:
             print(f"  {guildid}: ", end ="")
 
-            #find next upcoming or most recent event
-            currTime = int(time.time())
+            #find next or most recent event
             minIndex = -1
             minValue = 10**100
             for i, event in enumerate(events):
@@ -116,6 +119,7 @@ class Calendar(commands.Cog):
                 print("success")
 
 
+    #make announcement in given channel
     async def announceEvent(self, guildid:int, channelid:int, event):
 
         #get guild from guildid
@@ -147,7 +151,8 @@ class Calendar(commands.Cog):
         await channel.send(embed=announcement)
         return 0
 
-    #queries user and sets guild-specific announcement channel in db
+
+    #queries user and sets announcement channel and url in database
     @calendar.command(description="Configure calendar settings")
     async def setup(self, ctx):
 
@@ -252,16 +257,13 @@ class Calendar(commands.Cog):
 
     #opens database from: data/database.db
     async def openDatabase(self):
-        #create data/ if it doesnt exist
         if not os.path.exists("data/"):
             os.mkdir("data/")
         return await aiosqlite.connect("data/database.db")
     
+
 def setup(bot):
     bot.add_cog(Calendar(bot))
 
 def teardown(bot):
     bot.remove_cog('Calendar')
-
-#channel: 1032389925271781479
-#url: https://acm.mines.edu/schedule/ical.ics
