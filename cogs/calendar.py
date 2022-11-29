@@ -33,7 +33,7 @@ class Calendar(commands.Cog):
             elif id == "DTEND":
                 endTime = line[1]
             elif id == "DESCRIPTION":
-                description = line[1].replace("'", "")
+                description = line[1].replace("'", "").replace("\\n", "\n")
             elif id == "LOCATION":
                 location = line[1].replace("'","")
             elif line == ["END", "VEVENT"]:
