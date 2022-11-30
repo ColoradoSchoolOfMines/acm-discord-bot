@@ -12,3 +12,7 @@ environment/
 
 # Log files
 *.log
+
+# Data files
+data/
+temp_*

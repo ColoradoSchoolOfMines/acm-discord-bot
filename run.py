@@ -12,7 +12,9 @@ models.load_dot_env()
 DEBUG_GUILDS = models.get_env_safe(models.ENVs.DEBUG_GUILDS).split(',')
 bot = discord.Bot(debug_guilds=DEBUG_GUILDS)
 extensions = [
-    "loot"
+    "loot",
+    "roles",
+    "calendar",
 ]
 
 @bot.event
