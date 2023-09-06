@@ -18,7 +18,9 @@ extensions = [
 
 @bot.event
 async def on_ready():
-    print(f'{bot.user} is ready and online!')
+    print(f'\n{bot.user} is ready and online!')
+    print(f'Connected to {len(bot.guilds)} Guilds:')
+    print('\n'.join([f'  - {guild} ({guild.id})' for guild in bot.guilds]))
     logging.info(f'{bot.user} is ready and online!')
     logging.info(f'Connected to {len(bot.guilds)} Guilds:')
     for guild in bot.guilds:
