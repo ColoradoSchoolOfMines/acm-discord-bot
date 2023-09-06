@@ -14,7 +14,6 @@ bot = discord.Bot(debug_guilds=DEBUG_GUILDS)
 extensions = [
     "loot",
     "roles",
-    "calendar",
 ]
 
 @bot.event
