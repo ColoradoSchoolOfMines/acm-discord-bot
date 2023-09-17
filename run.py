@@ -14,6 +14,7 @@ bot = discord.Bot(debug_guilds=DEBUG_GUILDS)
 extensions = [
     "test",
     "roles",
+    "when2meet",
 ]
 
 @bot.event
